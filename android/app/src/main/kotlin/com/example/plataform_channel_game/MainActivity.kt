@@ -3,8 +3,8 @@ package com.example.plataform_channel_game
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.PersistableBundle
 import android.util.Log
+import androidx.annotation.NonNull
 import com.google.gson.JsonElement
 import com.pubnub.api.PNConfiguration
 import com.pubnub.api.PubNub
@@ -21,109 +21,111 @@ import com.pubnub.api.models.consumer.pubsub.message_actions.PNMessageActionResu
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.lang.reflect.Array
-import java.util.*
+import java.util.Arrays
 
 class MainActivity: FlutterActivity() {
 
+    //ATENÇÃOOOOO porque o channel é do canal entre o nativo e o dart
     private val CHANNEL_NATIVE_DART = "game/exchange"
 
-    private var pubNub: PubNub? = null
+    //a instância do PubNub, que é nosso pubsub com a nuvem
+    private var pubnub: PubNub? = null
     private var channel_pubnub: String? = null
 
     private var handler: Handler? = null
 
-    override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?) {
-        super.onCreate(savedInstanceState, persistentState)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
         handler = Handler(Looper.getMainLooper())
 
-        val pnConfiguration = PNConfiguration("MySuperSecretKey")
-        pnConfiguration.subscribeKey = "sub-c-f9924aed-0246-4d7c-8187-38fd7dd1a018"
-        pnConfiguration.publishKey = "pub-c-405eaa0c-628b-43a8-94ed-24af214ab398"
-        pubNub = PubNub(pnConfiguration)
+        //vamos nos ligar ao projeto do pubnub, na nuvem
+        val pnConfiguration = PNConfiguration("myUniqueUUID")
+        pnConfiguration.subscribeKey = "sub-c-c69666b4-bc1c-4b36-9e4b-9be4c58ea244"
+        pnConfiguration.publishKey = "pub-c-689e435d-22ea-4438-8d8f-c31f3d32143b"
+        pubnub = PubNub(pnConfiguration)
 
-        pubNub?.let {
-            it.addListener(object: SubscribeCallback(){
-                override fun status(pubnub: PubNub, pnStatus: PNStatus) {}
+        pubnub?.let {
+            it.addListener(object : SubscribeCallback() {
+                override fun status(pubnub: PubNub, status: PNStatus) { }
 
                 override fun message(pubnub: PubNub, message: PNMessageResult) {
-                    var receivedMessage: JsonElement? = null
+                    //nós estamos pegando o jsonObject tap da mensagem oriunda do pubnub
+                    //que vou enviado pelo nosso adversário
+                    var receivedMessageObject: JsonElement? = null
                     var actionReceived = "sendAction"
-                    if(message.message.asJsonObject["tap"] != null){
-                        receivedMessage = message.message.asJsonObject["tap"]
-                    }else {
-                        receivedMessage = message.message.asJsonObject["message"]
+                    if (message.message.asJsonObject["tap"] != null)
+                        receivedMessageObject = message.message.asJsonObject["tap"]
+                    else {
+                        receivedMessageObject = message.message.asJsonObject["message"]
                         actionReceived = "chat"
                     }
 
-                    Log.e("pubnub", "Received Message content: $receivedMessage")
+                    Log.e("pubnub", "Received message content: $receivedMessageObject")
 
+                    // por imposição da plataforma android nativa, algumas atividades
+                    //que podem, demandar tempo não podem ser executadas na Main Thread.
+                    //Por isso o usso do handler.
                     handler?.let {
-                        it.post{
-                            flutterEngine?.dartExecutor?.binaryMessenger?.let {
-                                MethodChannel(it, CHANNEL_NATIVE_DART)
-                                    .invokeMethod(actionReceived, "${receivedMessage.asString}")
-                            }
+                        //fazendo a coumincação PLatfrom Channel do NATIVO para o DART
+                        it.post {
+                            MethodChannel(flutterEngine?.dartExecutor?.binaryMessenger, CHANNEL_NATIVE_DART)
+                                .invokeMethod(
+                                    actionReceived,
+                                    "${receivedMessageObject.asString}"
+                                );
                         }
                     }
                 }
 
-                override fun presence(
-                    pubnub: PubNub,
-                    pnPresenceEventResult: PNPresenceEventResult
-                ) {}
 
+                override fun presence(pubnub: PubNub, presence: PNPresenceEventResult) {}
                 override fun signal(pubnub: PubNub, pnSignalResult: PNSignalResult) {}
-
                 override fun uuid(pubnub: PubNub, pnUUIDMetadataResult: PNUUIDMetadataResult) {}
-
-                override fun channel(
-                    pubnub: PubNub,
-                    pnChannelMetadataResult: PNChannelMetadataResult
-                ) {}
-
+                override fun channel(pubnub: PubNub, pnChannelMetadataResult: PNChannelMetadataResult) {}
                 override fun membership(pubnub: PubNub, pnMembershipResult: PNMembershipResult) {}
-
-                override fun messageAction(
-                    pubnub: PubNub,
-                    pnMessageActionResult: PNMessageActionResult
-                ) {}
-
+                override fun messageAction(pubnub: PubNub, pnMessageActionResult: PNMessageActionResult) {}
                 override fun file(pubnub: PubNub, pnFileEventResult: PNFileEventResult) {}
             })
         }
+
     }
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+    override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        flutterEngine?.dartExecutor?.binaryMessenger?.let {
-            MethodChannel(it, CHANNEL_NATIVE_DART)
-                .setMethodCallHandler{ call, result ->
-                  if(call.method == "sendAction"){
-                      pubNub!!.publish().message(call.arguments).channel(channel_pubnub).async{
-                              result, stats ->
-                                Log.e("pubnub", "Ocorreu erro: ${stats.isError}`")}
-                      result.success(true)
-                  }else if(call.method == "subscribe"){
-                      subscribeChannel(call.argument("channel"))
-                      result.success(true)
-                  }else if(call.method == "chat"){
-                      pubNub!!.publish().message(call.arguments).channel(channel_pubnub).async{
-                              result, stats ->
-                          Log.e("pubnub", "Ocorreu erro: ${stats.isError}`")}
-                      result.success(true)
-                  }else{
-                      result.notImplemented()
-                  }
-                }
+        //esse trecho de código é pro NATIVO responder a chamadas do DART
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_NATIVE_DART).setMethodCallHandler {
+            call, result ->
+            if (call.method == "sendAction") {
+                pubnub!!.publish()
+                    .message(call.arguments)
+                    .channel(channel_pubnub)
+                    .async { result, status ->
+                        Log.e("pubnub", "teve erro? ${status.isError}")
+                    }
+                result.success(true)
+            } else if (call.method == "subscribe") {
+                subscribeChannel(call.argument("channel"))
+                result.success(true)
+            } else if (call.method == "chat") {
+                pubnub!!.publish()
+                    .message(call.arguments)
+                    .channel(channel_pubnub)
+                    .async { result, status ->
+                        Log.e("pubnub", "teve erro? ${status.isError}")
+                    }
+                result.success(true)
+            } else {
+                result.notImplemented()
+            }
+
         }
     }
 
-    fun subscribeChannel(channelName : String?){
+    fun subscribeChannel(channelName: String?){
         channel_pubnub = channelName
-        channelName.let {
-            pubNub?.subscribe()?.channels(Arrays.asList(channelName))?.execute()
+        channelName?.let {
+            pubnub?.subscribe()?.channels(Arrays.asList(channelName))?.execute();
         }
     }
 

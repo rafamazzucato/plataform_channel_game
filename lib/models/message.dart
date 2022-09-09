@@ -5,4 +5,5 @@ class ExchangeMessage {
   final int y;
 
   ExchangeMessage(this.user, this.x, this.y);
+
 }
