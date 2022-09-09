@@ -19,27 +19,28 @@ class _GameState extends State<Game> {
   WrapperCreator? creator;
 
   @override
-  void initState(){
+  void initState() {
     super.initState();
-    //configurarPubNub();
+    configurarPubNub();
   }
 
-  void configurarPubNub(){
+  void configurarPubNub() {
     platform.setMethodCallHandler((call) async {
       String action = call.method;
       String argumentos = call.arguments.toString();
       List<String> parts = argumentos.split('|');
 
-      if(action == "sendAction"){
-        ExchangeMessage message = ExchangeMessage(parts[0], int.parse(parts[1]), int.parse(parts[2]));
-        if(message.user == (creator!.creator ? "p2" : 'p1')){
+      if (action == "sendAction") {
+        ExchangeMessage message =
+            ExchangeMessage(parts[0], int.parse(parts[1]), int.parse(parts[2]));
+        if (message.user == (creator!.creator ? "p2" : 'p1')) {
           setState(() {
             minhaVez = true;
             cells[message.x][message.y] = 2;
           });
           checkWinner();
         }
-      }else if(parts[0] == (creator!.creator ? 'p2' : 'p1')){
+      } else if (parts[0] == (creator!.creator ? 'p2' : 'p1')) {
         _showChat(parts[1]);
       }
     });
@@ -66,53 +67,50 @@ class _GameState extends State<Game> {
             }),
       );
 
-  Future<void> createGame(bool isCreator) async{
+  Future<void> createGame(bool isCreator) async {
     TextEditingController controller = TextEditingController();
     return showDialog(
-      context: context, 
-      barrierDismissible: false,
-      builder: (BuildContext context){
-        return AlertDialog(
-          title: Text("Qual o nome do jogo?"),
-          content: TextField(
-            controller: controller,
-          ),
-          actions: [
-            ElevatedButton(
-              child: Text("Jogar"),
-              onPressed: (){
-                  Navigator.of(context).pop();
-                  _sendAction('subscribe', {'channel': controller.text}).then((value){
-                    setState(() {
-                      creator = WrapperCreator(isCreator, controller.text);
-                      minhaVez = isCreator;
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Qual o nome do jogo?"),
+            content: TextField(
+              controller: controller,
+            ),
+            actions: [
+              ElevatedButton(
+                  child: Text("Jogar"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _sendAction('subscribe', {'channel': controller.text})
+                        .then((value) {
+                      setState(() {
+                        creator = WrapperCreator(isCreator, controller.text);
+                        minhaVez = isCreator;
+                      });
                     });
-                  });
-              }),
-            ElevatedButton(child: const Text("Cancelar"),
-            onPressed: (){
-              Navigator.of(context).pop();
-            })
-          ],
-        );
-      });
+                  }),
+              ElevatedButton(
+                  child: const Text("Cancelar"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  })
+            ],
+          );
+        });
   }
 
-  Future<bool>_sendAction(String action, Map<String, dynamic> arguments) async {
-    try{
+  Future<bool> _sendAction(
+      String action, Map<String, dynamic> arguments) async {
+    try {
       final resultado = await platform.invokeMethod(action, arguments);
-      if(resultado){
+      if (resultado) {
         return true;
       }
-    }catch(e){}
+    } catch (e) {}
     return false;
   }
-
-  checkWinner(){
-
-  }
-
-  _sendMessage() {}
 
   getCell(int x, int y) => InkWell(
         child: Container(
@@ -127,7 +125,23 @@ class _GameState extends State<Game> {
                           : "0",
                   style: textStyle75)),
         ),
-        onTap: () async {},
+        onTap: () async {
+          if (minhaVez == true && cells[x][y] == 0) {
+            _showSendingAction();
+            _sendAction('sendAction', {
+              'tap': '${creator!.creator ? 'p1' : 'p2'}|$x|$y'
+            }).then((value) {
+              Navigator.of(context).pop();
+
+              setState(() {
+                minhaVez = false;
+                cells[x][y] = 1;
+              });
+
+              checkWinner();
+            });
+          }
+        },
       );
 
   @override
@@ -171,9 +185,11 @@ class _GameState extends State<Game> {
                       buildButton("Entrar", false),
                     ], mainAxisSize: MainAxisSize.min)
                   : InkWell(
-                      child: Text(minhaVez == true
-                          ? "Sua vez!!"
-                          : "Aguarde a minha vez"),
+                      child: Text(
+                          minhaVez == true
+                              ? "Sua vez!!"
+                              : "Aguarde a minha vez",
+                          style: textStyle36),
                       onLongPress: () {
                         _sendMessage();
                       },
@@ -203,7 +219,120 @@ class _GameState extends State<Game> {
     )));
   }
 
-  _showChat(String part){
+  _showChat(String message) {
+    return showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Você recebeu uma nova mensagem"),
+            content: Text(message),
+            actions: [
+              ElevatedButton(
+                  child: const Text("Ok"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  })
+            ],
+          );
+        });
+  }
 
+  checkWinner() {
+    bool youWin = false;
+    bool opponentWin = false;
+
+    if (cells[0][0] == cells[0][1] && cells[0][1] == cells[0][2]) {
+      if (cells[0][0] == 1) {
+        youWin = true;
+      } else if (cells[0][0] == 2) {
+        opponentWin = true;
+      }
+    } else if (cells[1][0] == cells[1][1] && cells[1][1] == cells[1][2]) {
+    } else if (cells[2][0] == cells[2][1] && cells[2][1] == cells[2][2]) {
+    } else if (cells[0][1] == cells[1][1] && cells[1][1] == cells[2][1]) {
+    } else if (cells[0][2] == cells[1][2] && cells[1][2] == cells[2][2]) {
+    } else if (cells[0][0] == cells[1][1] && cells[1][1] == cells[2][2]) {
+    } else if (cells[0][2] == cells[1][1] && cells[1][1] == cells[2][0]) {}
+
+    if (youWin) {
+      _showFinishGame(true);
+    } else if (opponentWin) {
+      _showFinishGame(false);
+    } else {
+      //_showFinishGame(null);
+    }
+  }
+
+  _showFinishGame(bool? youWin) {
+    return showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Fim do jogo"),
+            content: Text(youWin == true ? "Você Ganhou!!" : youWin == false ? "Você perdeu" : "Não houve ganhador" ),
+            actions: [
+              ElevatedButton(
+                  child: const Text("Ok"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      minhaVez = null;
+                      creator = null;
+
+                      cells = [
+                        [0, 0, 0],
+                        [0, 0, 0],
+                        [0, 0, 0],
+                      ];
+                    });
+                  })
+            ],
+          );
+        });
+  }
+
+  Future<void> _sendMessage() {
+    TextEditingController controller = TextEditingController();
+    return showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Digite a mensagem abaixo:"),
+            content: TextField(
+              controller: controller,
+            ),
+            actions: [
+              ElevatedButton(
+                  child: Text("Enviar"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _sendAction('chat', {
+                      'message':
+                          '${creator!.creator ? 'p1' : 'p2'}|${controller.text}'
+                    });
+                  }),
+              ElevatedButton(
+                  child: const Text("Cancelar"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  })
+            ],
+          );
+        });
+  }
+
+  Future<void> _showSendingAction() {
+    return showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("Enviand ação, aguarde..."),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [CircularProgressIndicator()],
+            ),
+          );
+        });
   }
 }
