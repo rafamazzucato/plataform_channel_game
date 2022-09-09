@@ -75,7 +75,7 @@ class _GameState extends State<Game> {
 
   Widget buildButton(String label, bool owner) => Container(
     width: ScreenUtil().setWidth(300),
-    child: OutlineButton(
+    child: OutlinedButton(
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Text(

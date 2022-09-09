@@ -41,8 +41,8 @@ class MainActivity: FlutterActivity() {
 
         //vamos nos ligar ao projeto do pubnub, na nuvem
         val pnConfiguration = PNConfiguration("myUniqueUUID")
-        pnConfiguration.subscribeKey = "sub-c-c69666b4-bc1c-4b36-9e4b-9be4c58ea244"
-        pnConfiguration.publishKey = "pub-c-689e435d-22ea-4438-8d8f-c31f3d32143b"
+        pnConfiguration.subscribeKey = "sub-c-f9924aed-0246-4d7c-8187-38fd7dd1a018"
+        pnConfiguration.publishKey = "pub-c-405eaa0c-628b-43a8-94ed-24af214ab398"
         pubnub = PubNub(pnConfiguration)
 
         pubnub?.let {
@@ -69,11 +69,14 @@ class MainActivity: FlutterActivity() {
                     handler?.let {
                         //fazendo a coumincação PLatfrom Channel do NATIVO para o DART
                         it.post {
-                            MethodChannel(flutterEngine?.dartExecutor?.binaryMessenger, CHANNEL_NATIVE_DART)
-                                .invokeMethod(
-                                    actionReceived,
-                                    "${receivedMessageObject.asString}"
-                                );
+                            flutterEngine?.dartExecutor?.binaryMessenger?.let{
+                                MethodChannel(it, CHANNEL_NATIVE_DART)
+                                    .invokeMethod(
+                                        actionReceived,
+                                        "${receivedMessageObject.asString}"
+                                    );
+                            }
+
                         }
                     }
                 }
@@ -94,32 +97,34 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         //esse trecho de código é pro NATIVO responder a chamadas do DART
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_NATIVE_DART).setMethodCallHandler {
-            call, result ->
-            if (call.method == "sendAction") {
-                pubnub!!.publish()
-                    .message(call.arguments)
-                    .channel(channel_pubnub)
-                    .async { result, status ->
-                        Log.e("pubnub", "teve erro? ${status.isError}")
-                    }
-                result.success(true)
-            } else if (call.method == "subscribe") {
-                subscribeChannel(call.argument("channel"))
-                result.success(true)
-            } else if (call.method == "chat") {
-                pubnub!!.publish()
-                    .message(call.arguments)
-                    .channel(channel_pubnub)
-                    .async { result, status ->
-                        Log.e("pubnub", "teve erro? ${status.isError}")
-                    }
-                result.success(true)
-            } else {
-                result.notImplemented()
+        flutterEngine.dartExecutor.binaryMessenger?.let{
+            MethodChannel(it, CHANNEL_NATIVE_DART).setMethodCallHandler {
+                    call, result ->
+                if (call.method == "sendAction") {
+                    pubnub!!.publish()
+                        .message(call.arguments)
+                        .channel(channel_pubnub)
+                        .async { result, status ->
+                            Log.e("pubnub", "teve erro? ${status.isError}")
+                        }
+                    result.success(true)
+                } else if (call.method == "subscribe") {
+                    subscribeChannel(call.argument("channel"))
+                    result.success(true)
+                } else if (call.method == "chat") {
+                    pubnub!!.publish()
+                        .message(call.arguments)
+                        .channel(channel_pubnub)
+                        .async { result, status ->
+                            Log.e("pubnub", "teve erro? ${status.isError}")
+                        }
+                    result.success(true)
+                } else {
+                    result.notImplemented()
+                }
             }
-
         }
+
     }
 
     fun subscribeChannel(channelName: String?){
