@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:plataform_channel_game/models/creator.dart';
+import 'package:plataform_channel_game/models/message.dart';
 import 'package:plataform_channel_game/utils/constants.dart';
 
 class Game extends StatefulWidget {
@@ -16,6 +17,33 @@ class _GameState extends State<Game> {
 
   bool? minhaVez;
   WrapperCreator? creator;
+
+  @override
+  void initState(){
+    super.initState();
+    //configurarPubNub();
+  }
+
+  void configurarPubNub(){
+    platform.setMethodCallHandler((call) async {
+      String action = call.method;
+      String argumentos = call.arguments.toString();
+      List<String> parts = argumentos.split('|');
+
+      if(action == "sendAction"){
+        ExchangeMessage message = ExchangeMessage(parts[0], int.parse(parts[1]), int.parse(parts[2]));
+        if(message.user == (creator!.creator ? "p2" : 'p1')){
+          setState(() {
+            minhaVez = true;
+            cells[message.x][message.y] = 2;
+          });
+          checkWinner();
+        }
+      }else if(parts[0] == (creator!.creator ? 'p2' : 'p1')){
+        _showChat(parts[1]);
+      }
+    });
+  }
 
   List<List<int>> cells = [
     [0, 0, 0],
@@ -34,11 +62,55 @@ class _GameState extends State<Game> {
                 padding: const EdgeInsets.all(8.0),
                 child: Text(label, style: textStyle36)),
             onPressed: () {
-              createGame();
+              createGame(owner);
             }),
       );
 
-  createGame() {}
+  Future<void> createGame(bool isCreator) async{
+    TextEditingController controller = TextEditingController();
+    return showDialog(
+      context: context, 
+      barrierDismissible: false,
+      builder: (BuildContext context){
+        return AlertDialog(
+          title: Text("Qual o nome do jogo?"),
+          content: TextField(
+            controller: controller,
+          ),
+          actions: [
+            ElevatedButton(
+              child: Text("Jogar"),
+              onPressed: (){
+                  Navigator.of(context).pop();
+                  _sendAction('subscribe', {'channel': controller.text}).then((value){
+                    setState(() {
+                      creator = WrapperCreator(isCreator, controller.text);
+                      minhaVez = isCreator;
+                    });
+                  });
+              }),
+            ElevatedButton(child: const Text("Cancelar"),
+            onPressed: (){
+              Navigator.of(context).pop();
+            })
+          ],
+        );
+      });
+  }
+
+  Future<bool>_sendAction(String action, Map<String, dynamic> arguments) async {
+    try{
+      final resultado = await platform.invokeMethod(action, arguments);
+      if(resultado){
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
+
+  checkWinner(){
+
+  }
 
   _sendMessage() {}
 
@@ -129,5 +201,9 @@ class _GameState extends State<Game> {
         )
       ]),
     )));
+  }
+
+  _showChat(String part){
+
   }
 }
